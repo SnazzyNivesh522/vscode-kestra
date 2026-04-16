@@ -53,11 +53,23 @@ Simply tag your commit with `v{major}.{minor}.{patch}` and it will trigger a GHA
 
 ## Configuration
 
-The library allows two possible configurations:
+The library allows the following configurations:
 
 - `kestra.api.url`: The URL of your Kestra instance
 - `kestra.schema.match-path`: The path to files for which the Kestra API schema should be applied; this allows the extension to validate only YAML files from a specific folder desginated for kestra. For example, adding the following configuration to your `settings.json` will ensure that only files from the `_flows` directory will be validated as kestra flows:
+  ```json
+  "kestra.schema.match-path": "_flow"
+  ```
+- `kestra.auth.basic.username`: Optional username used for basic authentication with the Kestra API
+- `kestra.auth.basic.password`: Optional password used for basic authentication with the Kestra API (stored in plain text inside `settings.json`)
+
+Example configuration:
 
 ```json
-"kestra.schema.match-path": "_flow"
+{
+  "kestra.api.url": "http://localhost:8080/api/v1",
+  "kestra.schema.match-path": "_flow",
+  "kestra.auth.basic.username": "my-user",
+  "kestra.auth.basic.password": "my-password"
+}
 ```
