@@ -128,22 +128,81 @@ export default class ApiClient {
         } : undefined;
     }
 
+    private getConfiguredBasicAuth() {
+        const config = vscode.workspace.getConfiguration("kestra.auth.basic");
+        const username = config.get<string>("username")?.trim();
+        const password = config.get<string>("password")?.trim();
+
+        return {
+            username: username || undefined,
+            password: password || undefined
+        };
+    }
+
+    private async tryBasicAuth(url: string, username?: string, password?: string, persistCredentials: boolean = false) {
+        if (!username || !password) {
+            return;
+        }
+
+        const response = await fetch(url, {
+            headers: this.basicAuthHeader(username, password)
+        });
+
+        if (response.ok && persistCredentials) {
+            await this._secretStorage.store(secretStorageKey.username, username);
+            await this._secretStorage.store(secretStorageKey.password, password);
+            vscode.window.showInformationMessage("Saved basic credentials.");
+        }
+
+        return response;
+    }
+
     private async askCredentialsAndFetch(url: string): Promise<Response> {
         // Try basic auth first
         try {
+            const configuredCredentials = this.getConfiguredBasicAuth();
+
             // Get stored credentials
             const storedUsername = await this._secretStorage.get(secretStorageKey.username);
             const storedPassword = await this._secretStorage.get(secretStorageKey.password);
+            let username = configuredCredentials.username ?? storedUsername;
+            let password = configuredCredentials.password ?? storedPassword;
+            let shouldPromptForCredentials = false;
 
-            let username = storedUsername;
-            let password = storedPassword;
+            // Try configured credentials first to avoid prompting when possible
+            if (configuredCredentials.username && configuredCredentials.password) {
+                const configuredResponse = await this.tryBasicAuth(url, configuredCredentials.username, configuredCredentials.password, false);
+                if (configuredResponse) {
+                    if (configuredResponse.status === 401) {
+                        vscode.window.showWarningMessage("Configured basic auth credentials were rejected. Falling back to stored or prompted credentials.");
+                        password = undefined;
+                        shouldPromptForCredentials = true;
+                    } else {
+                        return configuredResponse;
+                    }
+                }
+            }
 
-            // If we don't have stored credentials, prompt for them
-            if (!storedUsername || !storedPassword) {
+            // Then try stored credentials from secret storage
+            if (storedUsername && storedPassword) {
+                const storedResponse = await this.tryBasicAuth(url, storedUsername, storedPassword, false);
+                if (storedResponse) {
+                    if (storedResponse.status !== 401) {
+                        return storedResponse;
+                    }
+                    vscode.window.showWarningMessage("Stored basic auth credentials were rejected. Please provide new credentials.");
+                    password = undefined;
+                    username = storedUsername;
+                    shouldPromptForCredentials = true;
+                }
+            }
+
+            // If we still don't have credentials, prompt for them
+            if (shouldPromptForCredentials || !username || !password) {
                 // Prompt for username
                 username = await vscode.window.showInputBox({
                     prompt: "Basic auth username (ESC to skip and use JWT Token)",
-                    value: storedUsername || "",
+                    value: username || "",
                     placeHolder: "Enter username or press ESC for JWT authentication"
                 });
 
@@ -152,7 +211,7 @@ export default class ApiClient {
                     password = await vscode.window.showInputBox({
                         prompt: "Basic auth password",
                         password: true,
-                        value: storedPassword || "",
+                        value: password || "",
                         placeHolder: "Enter password for basic authentication"
                     });
                 }
@@ -160,23 +219,13 @@ export default class ApiClient {
 
             // Try basic auth if we have both username and password
             if (username && username.trim() && password && password.trim()) {
-                const basicAuthResponse = await fetch(url, {
-                    headers: this.basicAuthHeader(username.trim(), password.trim())
-                });
-
-                if (basicAuthResponse.ok) {
-                    // Only store credentials if authentication was successful
-                    await this._secretStorage.store(secretStorageKey.username, username.trim());
-                    await this._secretStorage.store(secretStorageKey.password, password.trim());
-                    vscode.window.showInformationMessage("Saved basic credentials.");
-                    return basicAuthResponse;
-                }
-
-                if (basicAuthResponse.status === 401) {
-                    vscode.window.showWarningMessage("Basic auth failed. Please try JWT token authentication.");
-                } else {
-                    // Return non-401 responses as they might be valid (e.g., 403, 500, etc.)
-                    return basicAuthResponse;
+                const basicAuthResponse = await this.tryBasicAuth(url, username.trim(), password.trim(), true);
+                if (basicAuthResponse) {
+                    if (basicAuthResponse.status === 401) {
+                        vscode.window.showWarningMessage("Basic auth failed. Please try JWT token authentication.");
+                    } else {
+                        return basicAuthResponse;
+                    }
                 }
             } else if (password === undefined) {
                 // User cancelled password input, fall through to JWT

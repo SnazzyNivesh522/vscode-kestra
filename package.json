@@ -2,9 +2,9 @@
   "name": "kestra",
   "displayName": "Kestra",
   "description": "Kestra extension for VSCode to bring you smart autocompletion for your flows",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "icon": "images/icon.png",
-  "publisher": "kestra-io",
+  "publisher": "SnazzyNivesh522",
   "engines": {
     "vscode": "^1.82.0"
   },
@@ -68,6 +68,24 @@
           ],
           "default": null,
           "description": "Specify a directory to your Kestra flows so that only YAML files from that directory will be validated against the Kestra API schema."
+        },
+        "kestra.auth.basic.username": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "Username to use for basic authentication when accessing the Kestra API. Set this to avoid being prompted for credentials.",
+          "scope": "application"
+        },
+        "kestra.auth.basic.password": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null,
+          "markdownDescription": "Password to use for basic authentication when accessing the Kestra API. Stored in plain text in your settings.json; consider using workspace settings for local-only storage.",
+          "scope": "application"
         }
       }
     }
@@ -124,6 +142,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/kestra-io/vscode-kestra.git"
+    "url": "https://github.com/SnazzyNivesh522/vscode-kestra.git"
   }
 }
